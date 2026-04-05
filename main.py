@@ -5,8 +5,11 @@ from langchain_community.embeddings import SentenceTransformerEmbeddings
 import ollama
 import time
 import warnings
+import mlflow
 warnings.filterwarnings("ignore")
 
+mlflow.set_tracking_uri("sqlite:///mlflow.db")
+mlflow.set_experiment("enterprise-rag-chatbot")
 app = FastAPI(title="Enterprise RAG Chatbot API")
 
 # Load ChromaDB once when app starts
@@ -37,13 +40,20 @@ class QueryRequest(BaseModel):
 def query(request: QueryRequest):
     start_time = time.time()
 
-    # Retrieve relevant chunks from ChromaDB
-    retriever = vector_store.as_retriever()
-    relevant_docs = retriever.invoke(request.question)
-    context = "\n\n".join([doc.page_content for doc in relevant_docs])
+    with mlflow.start_run():
+        # Log input parameters
+        mlflow.log_param("model", "llama3")
+        mlflow.log_param("embedding_model", "all-MiniLM-L6-v2")
+        mlflow.log_param("vector_db", "chromadb")
+        mlflow.log_param("question", request.question)
 
-    # Build prompt
-    prompt = f"""
+        # Retrieve relevant chunks
+        retriever = vector_store.as_retriever()
+        relevant_docs = retriever.invoke(request.question)
+        context = "\n\n".join([doc.page_content for doc in relevant_docs])
+
+        # Build prompt
+        prompt = f"""
 You are an enterprise employee assistant. Answer using ONLY the context from company documents.
 
 Context:
@@ -55,16 +65,21 @@ Question:
 If the answer is not in the context, say "I don't have that information in the company documents."
 """
 
-    # Get LLaMA 3 response
-    response = ollama.chat(
-        model="llama3",
-        messages=[
-            {"role": "system", "content": "You are a helpful enterprise employee assistant."},
-            {"role": "user", "content": prompt}
-        ]
-    )
+        # Get LLaMA 3 response
+        response = ollama.chat(
+            model="llama3",
+            messages=[
+                {"role": "system", "content": "You are a helpful enterprise employee assistant."},
+                {"role": "user", "content": prompt}
+            ]
+        )
 
-    latency = round(time.time() - start_time, 2)
+        latency = round(time.time() - start_time, 2)
+        chunks_retrieved = len(relevant_docs)
+
+        # Log metrics
+        mlflow.log_metric("latency_seconds", latency)
+        mlflow.log_metric("chunks_retrieved", chunks_retrieved)
 
     return {
         "question": request.question,
