@@ -1,7 +1,6 @@
 import streamlit as st
 import requests
 import sounddevice as sd
-import numpy as np
 import scipy.io.wavfile as wav
 import tempfile
 import os
@@ -22,13 +21,10 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    /* Main background gradient */
     .stApp {
         background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
         color: white;
     }
-
-    /* Chat message — user */
     .user-message {
         background: linear-gradient(135deg, #667eea, #764ba2);
         padding: 12px 18px;
@@ -39,8 +35,6 @@ st.markdown("""
         color: white;
         font-size: 15px;
     }
-
-    /* Chat message — bot */
     .bot-message {
         background: linear-gradient(135deg, #1a1a2e, #16213e);
         border: 1px solid #667eea;
@@ -51,8 +45,6 @@ st.markdown("""
         color: white;
         font-size: 15px;
     }
-
-    /* Input box */
     .stTextInput > div > div > input {
         background: rgba(255,255,255,0.1);
         color: white;
@@ -60,8 +52,6 @@ st.markdown("""
         border-radius: 25px;
         padding: 10px 20px;
     }
-
-    /* Button */
     .stButton > button {
         background: linear-gradient(135deg, #667eea, #764ba2);
         color: white;
@@ -70,69 +60,10 @@ st.markdown("""
         padding: 8px 24px;
         font-weight: bold;
     }
-
     .stButton > button:hover {
         background: linear-gradient(135deg, #764ba2, #667eea);
         transform: scale(1.02);
     }
-
-    /* Flowchart container */
-    .flow-container {
-        background: rgba(255,255,255,0.05);
-        border: 1px solid rgba(102,126,234,0.3);
-        border-radius: 12px;
-        padding: 16px;
-        margin: 10px 0;
-    }
-
-    /* Step — inactive */
-    .step-inactive {
-        background: rgba(255,255,255,0.05);
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 8px;
-        padding: 8px 12px;
-        text-align: center;
-        color: rgba(255,255,255,0.4);
-        font-size: 12px;
-    }
-
-    /* Step — active */
-    .step-active {
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        border-radius: 8px;
-        padding: 8px 12px;
-        text-align: center;
-        color: white;
-        font-size: 12px;
-        font-weight: bold;
-        box-shadow: 0 0 12px rgba(102,126,234,0.6);
-    }
-
-    /* Step — done */
-    .step-done {
-        background: linear-gradient(135deg, #11998e, #38ef7d);
-        border-radius: 8px;
-        padding: 8px 12px;
-        text-align: center;
-        color: white;
-        font-size: 12px;
-        font-weight: bold;
-    }
-
-    /* Arrow */
-    .arrow {
-        text-align: center;
-        color: #667eea;
-        font-size: 18px;
-        padding: 2px 0;
-    }
-
-    /* Sidebar */
-    .css-1d391kg {
-        background: rgba(15,12,41,0.9);
-    }
-
-    /* Latency badge */
     .latency-badge {
         background: rgba(102,126,234,0.2);
         border: 1px solid #667eea;
@@ -143,8 +74,6 @@ st.markdown("""
         display: inline-block;
         margin-top: 6px;
     }
-
-    /* Sources badge */
     .source-badge {
         background: rgba(56,239,125,0.1);
         border: 1px solid #38ef7d;
@@ -165,109 +94,18 @@ st.markdown("""
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if "processing" not in st.session_state:
-    st.session_state.processing = False
-
-# ===============================
-# FLOWCHART FUNCTION
-# ===============================
-
-def show_flowchart(active_step=None, done_steps=[]):
-    steps = [
-        ("💬", "User Query"),
-        ("🔢", "Embedding"),
-        ("🔍", "Similarity Search"),
-        ("📄", "Chunk Retrieval"),
-        ("🦙", "LLaMA 3"),
-        ("✅", "Response")
-    ]
-
-    st.markdown('<div class="flow-container">', unsafe_allow_html=True)
-    st.markdown("**⚡ RAG Pipeline**", unsafe_allow_html=True)
-
-    cols = st.columns(len(steps) * 2 - 1)
-
-    for i, (icon, label) in enumerate(steps):
-        col_idx = i * 2
-        with cols[col_idx]:
-            if i in done_steps:
-                st.markdown(
-                    f'<div class="step-done">{icon}<br>{label}</div>',
-                    unsafe_allow_html=True
-                )
-            elif i == active_step:
-                st.markdown(
-                    f'<div class="step-active">{icon}<br>{label}</div>',
-                    unsafe_allow_html=True
-                )
-            else:
-                st.markdown(
-                    f'<div class="step-inactive">{icon}<br>{label}</div>',
-                    unsafe_allow_html=True
-                )
-
-        # Arrow between steps
-        if i < len(steps) - 1:
-            with cols[col_idx + 1]:
-                st.markdown('<div class="arrow">→</div>', unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
 # ===============================
 # QUERY FASTAPI FUNCTION
 # ===============================
 
-def query_rag(question, flowchart_placeholder):
-    import time
-
-    # Step 0 — User Query
-    with flowchart_placeholder:
-        show_flowchart(active_step=0, done_steps=[])
-    time.sleep(0.5)
-
-    # Step 1 — Embedding
-    with flowchart_placeholder:
-        show_flowchart(active_step=1, done_steps=[0])
-    time.sleep(0.5)
-
-    # Step 2 — Similarity Search
-    with flowchart_placeholder:
-        show_flowchart(active_step=2, done_steps=[0, 1])
-    time.sleep(0.5)
-
-    # Step 3 — Chunk Retrieval
-    with flowchart_placeholder:
-        show_flowchart(active_step=3, done_steps=[0, 1, 2])
-    time.sleep(0.5)
-
-    # Step 4 — LLaMA 3 (actual API call happens here)
-    with flowchart_placeholder:
-        show_flowchart(active_step=4, done_steps=[0, 1, 2, 3])
-        st.markdown(
-            "<p style='color:rgba(255,255,255,0.4); font-size:12px; text-align:center'>⏳ LLaMA 3 is generating response...</p>",
-            unsafe_allow_html=True
-        )
-
-    # Call FastAPI
+def query_rag(question):
     try:
         response = requests.post(
             "http://localhost:8000/query",
             json={"question": question},
             timeout=120
         )
-        data = response.json()
-
-        # Step 5 — Response
-        with flowchart_placeholder:
-            show_flowchart(active_step=5, done_steps=[0, 1, 2, 3, 4])
-        time.sleep(0.3)
-
-        # All done
-        with flowchart_placeholder:
-            show_flowchart(active_step=None, done_steps=[0, 1, 2, 3, 4, 5])
-
-        return data
-
+        return response.json()
     except Exception as e:
         return {"error": str(e)}
 
@@ -278,8 +116,9 @@ def query_rag(question, flowchart_placeholder):
 def record_voice():
     DURATION = 5
     SAMPLE_RATE = 16000
-
     st.info("🎤 Recording for 5 seconds... Speak now!")
+    import sounddevice as sd
+    import numpy as np
     audio = sd.rec(
         int(DURATION * SAMPLE_RATE),
         samplerate=SAMPLE_RATE,
@@ -287,7 +126,6 @@ def record_voice():
         dtype='int16'
     )
     sd.wait()
-
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
     wav.write(temp_file.name, SAMPLE_RATE, audio)
     return temp_file.name
@@ -296,7 +134,6 @@ def record_voice():
 # MAIN UI LAYOUT
 # ===============================
 
-# Header
 st.markdown("""
 <div style='text-align: center; padding: 20px 0'>
     <h1 style='background: linear-gradient(135deg, #667eea, #764ba2, #38ef7d);
@@ -329,11 +166,6 @@ with st.sidebar:
     if st.button("🗑️ Clear Chat"):
         st.session_state.messages = []
         st.rerun()
-
-# Flowchart placeholder — always visible
-flowchart_placeholder = st.empty()
-with flowchart_placeholder:
-    show_flowchart(active_step=None, done_steps=[])
 
 st.markdown("---")
 
@@ -392,30 +224,7 @@ if send_clicked and user_input:
     })
 
     with st.spinner("Thinking..."):
-        result = query_rag(user_input, flowchart_placeholder)
-
-    if "error" in result:
-        st.error(f"Error: {result['error']}")
-    else:
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": result.get("answer", "No answer returned"),
-            "latency": result.get("latency_seconds"),
-            "sources": result.get("sources", [])
-        })
-
-    st.rerun()
-# ===============================
-# HANDLE TEXT QUERY
-# ===============================
-
-if send_clicked and user_input:
-    st.session_state.messages.append({
-        "role": "user",
-        "content": user_input
-    })
-
-    result = query_rag(user_input, flowchart_placeholder)
+        result = query_rag(user_input)
 
     if "error" in result:
         st.error(f"Error: {result['error']}")
