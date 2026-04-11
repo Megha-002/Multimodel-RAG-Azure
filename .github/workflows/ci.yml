@@ -1,0 +1,49 @@
+name: CI Pipeline — Enterprise RAG Chatbot
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1 — Get the code
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Step 2 — Set up Python 3.11
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      # Step 3 — Install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Step 4 — Verify key imports work
+      - name: Verify imports
+        run: |
+          python -c "import fastapi; print('FastAPI OK')"
+          python -c "import chromadb; print('ChromaDB OK')"
+          python -c "import ollama; print('Ollama OK')"
+          python -c "import mlflow; print('MLflow OK')"
+          python -c "from prometheus_fastapi_instrumentator import Instrumentator; print('Prometheus OK')"
+          python -c "import streamlit; print('Streamlit OK')"
+
+      # Step 5 — Verify main.py has no syntax errors
+      - name: Check main.py syntax
+        run: python -m py_compile main.py && echo "main.py syntax OK"
+
+      # Step 6 — Verify all other py files have no syntax errors
+      - name: Check all Python files syntax
+        run: |
+          python -m py_compile RAG.py && echo "RAG.py OK"
+          python -m py_compile Ingest.py && echo "Ingest.py OK"
+          python -m py_compile ui.py && echo "ui.py OK"
