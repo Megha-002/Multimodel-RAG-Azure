@@ -6,11 +6,14 @@ import ollama
 import time
 import warnings
 import mlflow
+from prometheus_fastapi_instrumentator import Instrumentator
 warnings.filterwarnings("ignore")
 
 mlflow.set_tracking_uri("sqlite:///mlflow.db")
 mlflow.set_experiment("enterprise-rag-chatbot")
 app = FastAPI(title="Enterprise RAG Chatbot API")
+Instrumentator().instrument(app).expose(app)
+
 
 # Load ChromaDB once when app starts
 print("Loading ChromaDB...")

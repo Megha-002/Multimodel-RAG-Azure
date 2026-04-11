@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+
+  # Main RAG application
+  app:
+    build: .
+    container_name: rag-chatbot
+    ports:
+      - "8000:8000"
+      - "8501:8501"
+    volumes:
+      # Persist data folder and chroma_db across restarts
+      - ./data:/app/data
+      - ./chroma_db:/app/chroma_db
+      - ./mlruns:/app/mlruns
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # Prometheus — metrics collector
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: unless-stopped
+
+  # Grafana — metrics dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+    restart: unless-stopped
