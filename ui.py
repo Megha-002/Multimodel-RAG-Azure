@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-import sounddevice as sd
 import scipy.io.wavfile as wav
 import tempfile
 import os
@@ -196,20 +195,7 @@ def query_rag(question):
 # ===============================
 
 def record_voice():
-    DURATION = 5
-    SAMPLE_RATE = 16000
-    st.info("🎤 Recording for 5 seconds... Speak now!")
-    import numpy as np
-    audio = sd.rec(
-        int(DURATION * SAMPLE_RATE),
-        samplerate=SAMPLE_RATE,
-        channels=1,
-        dtype='int16'
-    )
-    sd.wait()
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-    wav.write(temp_file.name, SAMPLE_RATE, audio)
-    return temp_file.name
+    return None
 
 # ===============================
 # MAIN UI LAYOUT
