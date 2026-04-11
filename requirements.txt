@@ -10,7 +10,6 @@ sentence-transformers
 chromadb
 ollama
 openai-whisper
-sounddevice
 numpy
 scipy
 pypdf
