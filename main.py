@@ -147,4 +147,4 @@ async def upload_document(file: UploadFile = File(...)):
     with open(save_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
     os.system("python Ingest.py")
-    return {"message": f"{file.filename} uploaded and ingested successfully"}
+    return {"message": f"{file.filename} uploaded and ingested successfully in the database."}
