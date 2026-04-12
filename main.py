@@ -7,7 +7,7 @@ from fastapi import FastAPI, UploadFile, File
 from pydantic import BaseModel
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import SentenceTransformerEmbeddings
-import ollama
+from groq import Groq
 import mlflow
 from prometheus_fastapi_instrumentator import Instrumentator
 
@@ -33,32 +33,24 @@ vector_store = Chroma(
 print("✅ ChromaDB loaded!")
 
 # ===============================
+# GROQ CLIENT
+# ===============================
+
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+# ===============================
 # LLM HELPER FUNCTION
 # ===============================
 
 def get_llm_response(prompt):
-    use_groq = os.getenv("USE_GROQ", "false").lower() == "true"
-
-    if use_groq:
-        from groq import Groq
-        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        response = client.chat.completions.create(
-            model="llama3-8b-8192",
-            messages=[
-                {"role": "system", "content": "You are a helpful enterprise employee assistant."},
-                {"role": "user", "content": prompt}
-            ]
-        )
-        return response.choices[0].message.content
-    else:
-        response = ollama.chat(
-            model="llama3",
-            messages=[
-                {"role": "system", "content": "You are a helpful enterprise employee assistant."},
-                {"role": "user", "content": prompt}
-            ]
-        )
-        return response['message']['content']
+    response = groq_client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {"role": "system", "content": "You are a helpful enterprise employee assistant."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+    return response.choices[0].message.content
 
 # ===============================
 # HEALTH CHECK
@@ -80,7 +72,7 @@ def query(request: QueryRequest):
     start_time = time.time()
 
     with mlflow.start_run():
-        mlflow.log_param("model", "llama3")
+        mlflow.log_param("model", "llama-3.1-8b-instant-groq")
         mlflow.log_param("embedding_model", "all-MiniLM-L6-v2")
         mlflow.log_param("vector_db", "chromadb")
         mlflow.log_param("question", request.question)
@@ -147,4 +139,4 @@ async def upload_document(file: UploadFile = File(...)):
     with open(save_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
     os.system("python Ingest.py")
-    return {"message": f"{file.filename} uploaded and ingested successfully in the database."}
+    return {"message": f"{file.filename} uploaded and ingested successfully"}
