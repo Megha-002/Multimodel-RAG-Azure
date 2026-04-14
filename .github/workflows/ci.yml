@@ -32,7 +32,7 @@ jobs:
         run: |
           python -c "import fastapi; print('FastAPI OK')"
           python -c "import chromadb; print('ChromaDB OK')"
-          python -c "import ollama; print('Ollama OK')"
+          python -c "from groq import Groq; print('Groq OK')"
           python -c "import mlflow; print('MLflow OK')"
           python -c "from prometheus_fastapi_instrumentator import Instrumentator; print('Prometheus OK')"
           python -c "import streamlit; print('Streamlit OK')"
