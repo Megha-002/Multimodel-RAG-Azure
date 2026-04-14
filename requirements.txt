@@ -8,7 +8,7 @@ langchain-community
 langchain-core
 sentence-transformers
 chromadb
-ollama
+groq
 openai-whisper
 numpy
 scipy
@@ -19,3 +19,4 @@ mlflow
 prometheus-fastapi-instrumentator
 transformers
 torch
+python-dotenv
