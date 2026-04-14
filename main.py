@@ -1,33 +1,29 @@
 import os
 import time
 import warnings
-import shutil
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI
 from pydantic import BaseModel
-
 from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import FakeEmbeddings
-
+from langchain_community.embeddings import SentenceTransformerEmbeddings
 from groq import Groq
 import mlflow
 from prometheus_fastapi_instrumentator import Instrumentator
+from fastapi.middleware.cors import CORSMiddleware
 
 warnings.filterwarnings("ignore")
 load_dotenv()
 
-# ===============================
-# MLflow Setup
-# ===============================
+print("🚀 Starting FastAPI app...")
+
 mlflow.set_tracking_uri("sqlite:///mlflow.db")
 mlflow.set_experiment("enterprise-rag-chatbot")
 
-# ===============================
-# FastAPI App
-# ===============================
 app = FastAPI(title="Enterprise RAG Chatbot API")
 
+# ===============================
+# CORS
+# ===============================
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -39,25 +35,31 @@ app.add_middleware(
 Instrumentator().instrument(app).expose(app)
 
 # ===============================
-# LIGHTWEIGHT EMBEDDINGS
+# LOAD CHROMADB SAFELY
 # ===============================
-embeddings = FakeEmbeddings(size=384)
+print("Loading ChromaDB...")
 
-# ===============================
-# LAZY LOAD VECTOR STORE
-# ===============================
-vector_store = None
+# Force absolute paths
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CHROMA_PATH = os.path.join(BASE_DIR, "chroma_db")
+DB_FILE = os.path.join(CHROMA_PATH, "chroma.sqlite3")
 
-def get_vector_store():
-    global vector_store
-    if vector_store is None:
-        print("🔄 Loading ChromaDB...")
-        vector_store = Chroma(
-            persist_directory="chroma_db",
-            embedding_function=embeddings
-        )
-        print("✅ ChromaDB loaded!")
-    return vector_store
+# Stick to local SentenceTransformers
+embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+
+# Check for the actual file, not the folder Docker created
+if os.path.exists(DB_FILE):
+    vector_store = Chroma(
+        persist_directory=CHROMA_PATH,
+        embedding_function=embeddings
+    )
+    print(f"✅ ChromaDB safely loaded from: {CHROMA_PATH}")
+else:
+    print(f"⚠️ DANGER: SQLite file not found at {DB_FILE}. Creating a blank one...")
+    vector_store = Chroma(
+        embedding_function=embeddings,
+        persist_directory=CHROMA_PATH
+    )
 
 # ===============================
 # GROQ CLIENT
@@ -65,7 +67,7 @@ def get_vector_store():
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # ===============================
-# LLM HELPER
+# LLM FUNCTION
 # ===============================
 def get_llm_response(prompt):
     response = groq_client.chat.completions.create(
@@ -78,14 +80,14 @@ def get_llm_response(prompt):
     return response.choices[0].message.content
 
 # ===============================
-# HEALTH CHECK
+# HEALTH
 # ===============================
 @app.get("/health")
 def health():
     return {"status": "running"}
 
 # ===============================
-# QUERY ENDPOINT
+# QUERY
 # ===============================
 class QueryRequest(BaseModel):
     question: str
@@ -95,14 +97,8 @@ def query(request: QueryRequest):
     start_time = time.time()
 
     with mlflow.start_run():
-        mlflow.log_param("model", "llama-3.1-8b-instant-groq")
-        mlflow.log_param("embedding_model", "fake-embeddings")
-        mlflow.log_param("vector_db", "chromadb")
-        mlflow.log_param("question", request.question)
-
-        retriever = get_vector_store().as_retriever()
+        retriever = vector_store.as_retriever()
         relevant_docs = retriever.invoke(request.question)
-
         context = "\n\n".join([doc.page_content for doc in relevant_docs])
 
         prompt = f"""
@@ -113,17 +109,10 @@ Context:
 
 Question:
 {request.question}
-
-If not found, say:
-"I don't have that information in the company documents."
 """
 
         answer = get_llm_response(prompt)
-
         latency = round(time.time() - start_time, 2)
-
-        mlflow.log_metric("latency_seconds", latency)
-        mlflow.log_metric("chunks_retrieved", len(relevant_docs))
 
     return {
         "question": request.question,
@@ -131,17 +120,3 @@ If not found, say:
         "latency_seconds": latency,
         "sources": [doc.metadata.get("source", "unknown") for doc in relevant_docs]
     }
-
-# ===============================
-# UPLOAD ENDPOINT
-# ===============================
-@app.post("/upload")
-async def upload_document(file: UploadFile = File(...)):
-    save_path = f"data/{file.filename}"
-
-    with open(save_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-
-    os.system("python Ingest.py")
-
-    return {"message": f"{file.filename} uploaded and ingested successfully"}
