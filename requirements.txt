@@ -9,7 +9,6 @@ langchain-core
 sentence-transformers
 chromadb
 groq
-openai-whisper
 numpy
 scipy
 pypdf
@@ -17,6 +16,4 @@ pytesseract
 pillow
 mlflow
 prometheus-fastapi-instrumentator
-transformers
-torch
 python-dotenv

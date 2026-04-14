@@ -4,25 +4,30 @@ import warnings
 import shutil
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
 from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import SentenceTransformerEmbeddings
+from langchain_community.embeddings import FakeEmbeddings
+
 from groq import Groq
 import mlflow
 from prometheus_fastapi_instrumentator import Instrumentator
-from fastapi.middleware.cors import CORSMiddleware
 
 warnings.filterwarnings("ignore")
 load_dotenv()
 
-print("🚀 Starting FastAPI app...")
-
+# ===============================
+# MLflow Setup
+# ===============================
 mlflow.set_tracking_uri("sqlite:///mlflow.db")
 mlflow.set_experiment("enterprise-rag-chatbot")
 
+# ===============================
+# FastAPI App
+# ===============================
 app = FastAPI(title="Enterprise RAG Chatbot API")
 
-# ✅ CORS FIX
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -34,35 +39,34 @@ app.add_middleware(
 Instrumentator().instrument(app).expose(app)
 
 # ===============================
-# LOAD CHROMADB SAFELY
+# LIGHTWEIGHT EMBEDDINGS
 # ===============================
+embeddings = FakeEmbeddings(size=384)
 
-print("Loading ChromaDB...")
-embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+# ===============================
+# LAZY LOAD VECTOR STORE
+# ===============================
+vector_store = None
 
-if os.path.exists("chroma_db"):
-    vector_store = Chroma(
-        persist_directory="chroma_db",
-        embedding_function=embeddings
-    )
-    print("✅ ChromaDB loaded!")
-else:
-    print("⚠️ chroma_db not found. Creating new DB...")
-    vector_store = Chroma(
-        embedding_function=embeddings,
-        persist_directory="chroma_db"
-    )
+def get_vector_store():
+    global vector_store
+    if vector_store is None:
+        print("🔄 Loading ChromaDB...")
+        vector_store = Chroma(
+            persist_directory="chroma_db",
+            embedding_function=embeddings
+        )
+        print("✅ ChromaDB loaded!")
+    return vector_store
 
 # ===============================
 # GROQ CLIENT
 # ===============================
-
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # ===============================
-# LLM FUNCTION
+# LLM HELPER
 # ===============================
-
 def get_llm_response(prompt):
     response = groq_client.chat.completions.create(
         model="llama-3.1-8b-instant",
@@ -74,17 +78,15 @@ def get_llm_response(prompt):
     return response.choices[0].message.content
 
 # ===============================
-# HEALTH
+# HEALTH CHECK
 # ===============================
-
 @app.get("/health")
 def health():
     return {"status": "running"}
 
 # ===============================
-# QUERY
+# QUERY ENDPOINT
 # ===============================
-
 class QueryRequest(BaseModel):
     question: str
 
@@ -93,8 +95,14 @@ def query(request: QueryRequest):
     start_time = time.time()
 
     with mlflow.start_run():
-        retriever = vector_store.as_retriever()
+        mlflow.log_param("model", "llama-3.1-8b-instant-groq")
+        mlflow.log_param("embedding_model", "fake-embeddings")
+        mlflow.log_param("vector_db", "chromadb")
+        mlflow.log_param("question", request.question)
+
+        retriever = get_vector_store().as_retriever()
         relevant_docs = retriever.invoke(request.question)
+
         context = "\n\n".join([doc.page_content for doc in relevant_docs])
 
         prompt = f"""
@@ -105,10 +113,17 @@ Context:
 
 Question:
 {request.question}
+
+If not found, say:
+"I don't have that information in the company documents."
 """
 
         answer = get_llm_response(prompt)
+
         latency = round(time.time() - start_time, 2)
+
+        mlflow.log_metric("latency_seconds", latency)
+        mlflow.log_metric("chunks_retrieved", len(relevant_docs))
 
     return {
         "question": request.question,
@@ -116,3 +131,17 @@ Question:
         "latency_seconds": latency,
         "sources": [doc.metadata.get("source", "unknown") for doc in relevant_docs]
     }
+
+# ===============================
+# UPLOAD ENDPOINT
+# ===============================
+@app.post("/upload")
+async def upload_document(file: UploadFile = File(...)):
+    save_path = f"data/{file.filename}"
+
+    with open(save_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    os.system("python Ingest.py")
+
+    return {"message": f"{file.filename} uploaded and ingested successfully"}
