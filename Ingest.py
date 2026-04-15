@@ -16,7 +16,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Tesseract path
+# Tesseract path for OCR
 pytesseract.pytesseract.tesseract_cmd = "tesseract"
 
 # Load embeddings

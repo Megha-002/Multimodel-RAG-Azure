@@ -35,7 +35,7 @@ jobs:
           python -c "from groq import Groq; print('Groq OK')"
           python -c "import mlflow; print('MLflow OK')"
           python -c "from prometheus_fastapi_instrumentator import Instrumentator; print('Prometheus OK')"
-          python -c "import streamlit; print('Streamlit OK')"
+          python -c "import streamlit; print('Streamlit OKK')"
 
       # Step 5 — Verify main.py has no syntax errors
       - name: Check main.py syntax
