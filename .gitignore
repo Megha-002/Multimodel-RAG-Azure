@@ -1,7 +1,11 @@
-temp_audio.wav
-.env
 __pycache__/
 *.pyc
-.DS_Store
-venv/
+.env
+data/
+images/
+chroma_db/
 mlflow.db
+*.db
+*.sqlite
+temp_audio.wav
+generated_image.png
