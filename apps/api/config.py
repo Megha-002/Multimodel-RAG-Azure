@@ -16,7 +16,7 @@ HF_EMBED_URL = os.getenv("HF_EMBED_URL")
 
 # --- Pinecone ---
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-PINECONE_INDEX = os.getenv("PINECONE_INDEX", "rag-index")
+PINECONE_INDEX = os.getenv("PINECONE_INDEX", "ragindex")
 PINECONE_REGION = os.getenv("PINECONE_REGION", "us-east-1")
 
 # --- MLflow / DagsHub ---
