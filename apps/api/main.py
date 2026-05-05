@@ -1,7 +1,8 @@
-import time
 import os
+import time
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from schemas import QueryRequest, QueryResponse, STTResponse
 from services.rag_service import run_rag
@@ -25,13 +26,14 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+# ── Prometheus Metrics ─────────────────────────────────────
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
+# ── MLflow + DagsHub Auth ──────────────────────────────────
 os.environ["MLFLOW_TRACKING_USERNAME"] = DAGSHUB_USERNAME
 os.environ["MLFLOW_TRACKING_PASSWORD"] = DAGSHUB_TOKEN
-
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 mlflow.set_experiment("multimodal-rag")
-
 
 
 # ── Routes ─────────────────────────────────────────────────
