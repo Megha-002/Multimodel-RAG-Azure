@@ -1,0 +1,92 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Job 1: Lint — Check code style ──────────────────────
+  lint:
+    name: Code Quality Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install linter
+        run: pip install flake8
+
+      - name: Run flake8 on API code
+        run: flake8 apps/api/ --max-line-length=120 --ignore=E501,W503
+
+      - name: Run flake8 on UI code
+        run: flake8 apps/ui/ --max-line-length=120 --ignore=E501,W503
+
+      - name: Run flake8 on Ingest code
+        run: flake8 ingest/ --max-line-length=120 --ignore=E501,W503
+
+  # ── Job 2: Dependency Check — Ensure installs work ──────
+  dependency-check:
+    name: Dependency Install Check
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install API dependencies
+        run: pip install -r apps/api/requirements.txt
+
+      - name: Install UI dependencies
+        run: pip install -r apps/ui/requirements.txt
+
+      - name: Install Ingest dependencies
+        run: pip install -r ingest/requirements.txt
+
+  # ── Job 3: Import Check — Ensure code loads correctly ───
+  import-check:
+    name: Import Validation
+    runs-on: ubuntu-latest
+    needs: dependency-check
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install API dependencies
+        run: pip install -r apps/api/requirements.txt
+
+      - name: Verify API imports
+        working-directory: apps/api
+        run: |
+          python -c "from config import GROQ_API_KEY; print('✅ config.py OK')"
+          python -c "from schemas import QueryRequest; print('✅ schemas.py OK')"
+          python -c "from services.embed_client import get_embedding; print('✅ embed_client.py OK')"
+          python -c "from services.groq_client import generate_answer; print('✅ groq_client.py OK')"
+
+      - name: Install UI dependencies
+        run: pip install -r apps/ui/requirements.txt
+
+      - name: Verify UI imports
+        working-directory: apps/ui
+        run: |
+          python -c "from api_client import query_rag; print('✅ api_client.py OK')"
